@@ -24,6 +24,15 @@ class RMSNorm(nn.Module):
         return x.type_as(x0)
 
 
+class Norm(nn.Module):
+    """Normalization module to reproject on the unit sphere."""
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x0: torch.Tensor) -> torch.Tensor:
+        return x0 / x0.norm(dim=-1, keepdim=True)
+
 class Rotary(torch.nn.Module):
     """Rotary position embeddings."""
     
@@ -125,32 +134,38 @@ class MLP(nn.Module):
 class Block(nn.Module):
     """Transformer block with PoM attention and MLP."""
     
-    def __init__(self, mixing_layer, n_embd, n_layer):
+    def __init__(self, mixing_layer, n_embd, n_layer, normalize_layers):
         super().__init__()
         self.attn = mixing_layer #CausalSelfPoM(n_embd, degree, expand, n_head)
         self.mlp = MLP(n_embd)
         self.attn_scale = (1 / (2 * n_layer)**0.5)
+        self.normalize_layers = normalize_layers
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.attn_scale * self.attn(rmsnorm(x))
-        x = x + self.mlp(rmsnorm(x))
+        if self.normalize_layers:
+            x = x + self.attn_scale * self.attn(rmsnorm(x))
+            x = x + self.mlp(rmsnorm(x))
+        else:
+            x = x + self.attn_scale * self.attn(x)
+            x = x + self.mlp(x)
         return x
 
 
 class GPT(nn.Module):
     """GPT model with Polynomial Mixer attention."""
     
-    def __init__(self, mixing_layer, vocab_size: int = 50257, n_layer: int = 12, n_head: int = 12, n_embd: int = 768):
+    def __init__(self, mixing_layer, vocab_size: int = 50257, n_layer: int = 12, n_head: int = 12, n_embd: int = 768, normalize_layers: bool = True):
         super().__init__()
         self.vocab_size = vocab_size
         self.n_layer = n_layer
         self.n_head = n_head
         self.n_embd = n_embd
+        self.normalize_layers = normalize_layers
         self.head_dim = self.n_embd // self.n_head
 
         self.transformer = nn.ModuleDict(dict(
             wte=nn.Embedding(self.vocab_size, self.n_embd),
-            h=nn.ModuleList([Block(mixing_layer, self.n_embd, self.n_layer) for _ in range(self.n_layer)]),
+            h=nn.ModuleList([Block(mixing_layer, self.n_embd, self.n_layer, self.normalize_layers) for _ in range(self.n_layer)]),
         ))
         self.lm_head = nn.Linear(self.n_embd, self.vocab_size, bias=False)
         self.transformer.wte.weight = self.lm_head.weight  # weight tying
@@ -182,7 +197,9 @@ class GPT(nn.Module):
 
         for block in self.transformer.h:
             x = block(x)
-        x = rmsnorm(x)
+
+        if self.normalize_layers:
+            x = rmsnorm(x)
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
