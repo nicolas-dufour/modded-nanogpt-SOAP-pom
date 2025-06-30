@@ -7,5 +7,6 @@ defaults:
 training:
   batch_size: 48
   accumulation: 8
+  num_iterations: 1500
 
-experiment_name: baseline_transformer
+experiment_name: baseline_transformer_thibaut
