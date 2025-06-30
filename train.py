@@ -83,9 +83,6 @@ def main(cfg: DictConfig):
     print0(f"Configuration:\n{OmegaConf.to_yaml(cfg)}")
     dict_cfg = OmegaConf.to_container(cfg, resolve=True)
     
-    # Set up wandb
-    wandb.init(project="pom_archi", entity="imaginelab", config=dict_cfg, name=cfg.experiment_name)
-    
     # Set up distributed training
     assert torch.cuda.is_available()
     dist.init_process_group(backend=cfg.distributed.backend)
@@ -96,6 +93,10 @@ def main(cfg: DictConfig):
     torch.cuda.set_device(device)
     print(f"using device: {device}")
     master_process = (ddp_rank == 0)
+    
+    # Set up wandb (only on rank 0)
+    if master_process:
+        wandb.init(project="pom_archi", entity="imaginelab", config=dict_cfg, name=cfg.experiment_name)
     
     # Load data
     train_loader = DistributedDataLoader(
