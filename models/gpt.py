@@ -30,8 +30,8 @@ class Norm(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, x0: torch.Tensor) -> torch.Tensor:
-        return x0 / x0.norm(dim=-1, keepdim=True)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x / x.norm(p=2, dim=-1, keepdim=True)
 
 class Rotary(torch.nn.Module):
     """Rotary position embeddings."""
@@ -162,6 +162,7 @@ class GPT(nn.Module):
         self.n_embd = n_embd
         self.normalize_layers = normalize_layers
         self.head_dim = self.n_embd // self.n_head
+        print(normalize_layers)
 
         self.transformer = nn.ModuleDict(dict(
             wte=nn.Embedding(self.vocab_size, self.n_embd),

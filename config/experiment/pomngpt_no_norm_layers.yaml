@@ -11,6 +11,6 @@ training:
 
 model:
   gpt:
-    normalize_layers: False
+    normalize_layers: false
 
 experiment_name: pomngpt_no_norm_layers
