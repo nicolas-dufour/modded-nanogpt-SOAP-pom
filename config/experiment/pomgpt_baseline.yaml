@@ -6,7 +6,7 @@ defaults:
 
 training:
   batch_size: 48
-  accumulation: 8
+  accumulation: 2
   num_iterations: 1500
 
 experiment_name: baseline_pom
