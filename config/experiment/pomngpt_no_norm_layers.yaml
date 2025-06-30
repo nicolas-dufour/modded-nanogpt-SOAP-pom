@@ -1,0 +1,16 @@
+# @package _global_
+
+defaults:
+  - override /model: pomgpt
+
+
+training:
+  batch_size: 48
+  accumulation: 2
+  num_iterations: 1500
+
+model:
+  gpt:
+    normalize_layers: False
+
+experiment_name: pomngpt_no_norm_layers
