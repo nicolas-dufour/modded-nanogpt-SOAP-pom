@@ -12,4 +12,4 @@ model:
     n_layer: ${model.n_layer}
     n_head: ${model.n_head}
     n_embd: ${model.n_embd}
-    normalize_layers: true
+    use_nGPT: 0

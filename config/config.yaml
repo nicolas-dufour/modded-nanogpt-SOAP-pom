@@ -10,10 +10,10 @@ training:
   batch_size: 48
   accumulation: 2
   sequence_length: 1024
-  num_iterations: 7000
+  num_iterations: 1500
   learning_rate: 0.0018
   warmup_iters: 250
-  warmdown_iters: 2000
+  warmdown_iters: 0
   weight_decay: 0.5
 
 # Evaluation configuration
