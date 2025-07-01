@@ -22,6 +22,10 @@ from data import DistributedDataLoader
 # Set float32 matmul precision to match reference implementation
 torch.set_float32_matmul_precision('high')
 
+
+def justnorm(x, dim):
+    return x / x.norm(p=2, dim=dim, keepdim=True)
+
 class SpeedColumn(ProgressColumn):
     """Custom column to display training speed"""
     
@@ -75,6 +79,19 @@ def get_lr(step: int, num_iterations: int, warmup_iters: int, warmdown_iters: in
         decay_ratio = (num_iterations - step) / warmdown_iters
         return decay_ratio
 
+def normalize_matrices(model):
+    model.transformer.wte.weight.data.copy_(justnorm(model.transformer.wte.weight.data, 1))
+    model.lm_head.weight.data.copy_(justnorm(model.lm_head.weight.data, 1))
+
+    for block in model.transformer.h:
+        # For attn
+        block.attn.pom.po_proj.weight.data.copy_(justnorm(block.attn.pom.po_proj.weight.data, 1))  # (dim, degree * expand * dim)
+        block.attn.pom.se_proj.weight.data.copy_(justnorm(block.attn.pom.se_proj.weight.data, 1))  # (dim, degree * expand * dim)
+        block.attn.pom.ag_proj.weight.data.copy_(justnorm(block.attn.pom.ag_proj.weight.data, 0))  # (degree * expand * dim, dim)
+
+        # For mlp
+        block.mlp.c_fc.weight.data.copy_(justnorm(block.mlp.c_fc.weight.data, 1))  # (n_embd, 4 * n_embd)
+        block.mlp.c_proj.weight.data.copy_(justnorm(block.mlp.c_proj.weight.data, 0))  # (4 * n_embd, n_embd)
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg: DictConfig):
@@ -122,6 +139,9 @@ def main(cfg: DictConfig):
     # Initialize model using Hydra instantiate
     model = instantiate(cfg.model.gpt)
     model = model.cuda()
+
+    if cfg.model.gpt.use_nGPT == 1:
+        normalize_matrices(model)
     
     if hasattr(config, "coordinate_descent_tuning"):
         config.coordinate_descent_tuning = True  # suggested by @Chillee
@@ -243,6 +263,9 @@ def main(cfg: DictConfig):
         
         torch.cuda.synchronize()
         t1 = time.time()
+
+        if cfg.model.gpt.use_nGPT == 1:
+            normalize_matrices(raw_model)
         
         # Logging
         dist.all_reduce(train_loss, op=dist.ReduceOp.AVG)
