@@ -23,8 +23,10 @@ from data import DistributedDataLoader
 torch.set_float32_matmul_precision('high')
 
 
-def justnorm(x, dim):
-    return x / x.norm(p=2, dim=dim, keepdim=True)
+def justnorm(x0, dim):
+    x = x0.float()
+    x = x / x.norm(p=2, dim=dim, keepdim=True)
+    return x.type_as(x0)
 
 class SpeedColumn(ProgressColumn):
     """Custom column to display training speed"""
@@ -111,10 +113,6 @@ def main(cfg: DictConfig):
     print(f"using device: {device}")
     master_process = (ddp_rank == 0)
     
-    # Set up wandb (only on rank 0)
-    if master_process:
-        wandb.init(project="pom_archi", entity="imaginelab", config=dict_cfg, name=cfg.experiment_name)
-    
     # Load data
     train_loader = DistributedDataLoader(
         cfg.data.train.input_bin,
@@ -153,7 +151,11 @@ def main(cfg: DictConfig):
     # Wrap model in DDP
     model = DDP(model, device_ids=[ddp_local_rank], find_unused_parameters=cfg.distributed.find_unused_parameters)
     raw_model = model.module
-    wandb.watch(raw_model, log="all", log_freq=100)
+
+    # Set up wandb (only on rank 0)
+    if master_process:
+        wandb.init(project="pom_archi", entity="imaginelab", config=dict_cfg, name=cfg.experiment_name)
+        wandb.watch(raw_model, log="all", log_freq=5)
     
     # Set up context manager for mixed precision
     ctx = torch.amp.autocast(device_type='cuda', dtype=getattr(torch, cfg.hardware.dtype))

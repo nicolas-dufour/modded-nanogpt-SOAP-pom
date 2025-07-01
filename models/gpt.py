@@ -10,8 +10,10 @@ def rmsnorm(x0, eps=1e-6):
     x = x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + eps)
     return x.type_as(x0)
 
-def justnorm(x):
-    return x / x.norm(p=2, dim=-1, keepdim=True)
+def justnorm(x0):
+    x = x0.float()
+    x = x / x.norm(p=2, dim=-1, keepdim=True)
+    return x.type_as(x0)
 
 class RMSNorm(nn.Module):
     """RMS normalization module."""
@@ -145,33 +147,33 @@ class Block(nn.Module):
         if self.use_nGPT == 1:
             self.attn_alpha_init_value = 0.05
             self.attn_alpha_init_scaling = 1 / (n_embd**0.5)
-            self.attn_alpha = nn.Parameter(self.attn_alpha_init_scaling * torch.ones(n_embd, dtype=torch.float32))
+            self.attn_alpha = nn.Parameter(self.attn_alpha_init_scaling * torch.ones(n_embd, dtype=torch.float32), requires_grad=True)
 
             self.mlp_alpha_init_value = 0.05
             self.mlp_alpha_init_scaling = 1 / (n_embd**0.5)
-            self.mlp_alpha = nn.Parameter(self.mlp_alpha_init_scaling * torch.ones(n_embd, dtype=torch.float32))
+            self.mlp_alpha = nn.Parameter(self.mlp_alpha_init_scaling * torch.ones(n_embd, dtype=torch.float32), requires_grad=True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.use_nGPT == 0:
             x = x + self.attn_scale * self.attn(rmsnorm(x))
             x = x + self.mlp(rmsnorm(x))
-            
+
         if self.use_nGPT == 1:
             x_norm = justnorm(x)
 
             # For attn
             lr_attn = self.attn_alpha * (self.attn_alpha_init_value * self.attn_alpha_init_scaling)
             lr_attn = torch.abs(lr_attn)
-            x = x_norm + lr_attn * (justnorm(self.attn(x_norm)) - x_norm)
-            x = justnorm(x)
+            x_attn = x_norm + lr_attn * (justnorm(self.attn(x_norm)) - x_norm)
+            x_attn = justnorm(x_attn)
 
             # For mlp
             lr_mlp = self.mlp_alpha * (self.mlp_alpha_init_value * self.mlp_alpha_init_scaling)
             lr_mlp = torch.abs(lr_mlp)
-            x = x_norm + lr_mlp * (justnorm(self.mlp(x_norm)) - x_norm)
-            x = justnorm(x)
+            x_mlp = x_attn + lr_mlp * (justnorm(self.mlp(x_attn)) - x_attn)
+            x_mlp = justnorm(x_mlp)
 
-        return x
+        return x_mlp
 
 
 class GPT(nn.Module):
