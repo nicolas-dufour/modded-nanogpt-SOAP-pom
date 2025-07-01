@@ -153,6 +153,7 @@ def main(cfg: DictConfig):
     # Wrap model in DDP
     model = DDP(model, device_ids=[ddp_local_rank], find_unused_parameters=cfg.distributed.find_unused_parameters)
     raw_model = model.module
+    wandb.watch(raw_model, log="all", log_freq=100)
     
     # Set up context manager for mixed precision
     ctx = torch.amp.autocast(device_type='cuda', dtype=getattr(torch, cfg.hardware.dtype))
