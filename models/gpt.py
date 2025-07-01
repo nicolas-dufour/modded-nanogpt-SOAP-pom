@@ -10,6 +10,8 @@ def rmsnorm(x0, eps=1e-6):
     x = x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + eps)
     return x.type_as(x0)
 
+def justnorm(x):
+    return x / x.norm(p=2, dim=-1, keepdim=True)
 
 class RMSNorm(nn.Module):
     """RMS normalization module."""
@@ -130,7 +132,6 @@ class MLP(nn.Module):
         x = self.c_proj(x)
         return x
 
-
 class Block(nn.Module):
     """Transformer block with PoM attention and MLP."""
     
@@ -141,16 +142,13 @@ class Block(nn.Module):
         self.attn_scale = (1 / (2 * n_layer)**0.5)
         self.use_nGPT = use_nGPT
 
-    def justnorm(self, x):
-        return x / x.norm(p=2, dim=-1, keepdim=True)
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.use_nGPT == 0:
             x = x + self.attn_scale * self.attn(rmsnorm(x))
             x = x + self.mlp(rmsnorm(x))
         if self.use_nGPT == 1:
-            x = self.justnorm(x + self.attn_scale * self.justnorm(self.attn(x)))
-            x = self.justnorm(x + self.justnorm(self.mlp(x)))
+            x = justnorm(x + self.attn_scale * justnorm(self.attn(x)))
+            x = justnorm(x + justnorm(self.mlp(x)))
         return x
 
 
@@ -203,6 +201,9 @@ class GPT(nn.Module):
 
         if self.use_nGPT == 0:
             x = rmsnorm(x)
+
+        if self.use_nGPT == 1:
+            x = justnorm(x)
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
