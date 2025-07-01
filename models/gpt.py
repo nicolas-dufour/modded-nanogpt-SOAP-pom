@@ -142,13 +142,34 @@ class Block(nn.Module):
         self.attn_scale = (1 / (2 * n_layer)**0.5)
         self.use_nGPT = use_nGPT
 
+        if self.use_nGPT == 1:
+            self.attn_alpha_init_value = 0.05
+            self.attn_alpha_init_scaling = 1 / (n_embd**0.5)
+            self.attn_alpha = nn.Parameter(self.attn_alpha_init_scaling * torch.ones(n_embd, dtype=torch.float32))
+
+            self.mlp_alpha_init_value = 0.05
+            self.mlp_alpha_init_scaling = 1 / (n_embd**0.5)
+            self.mlp_alpha = nn.Parameter(self.mlp_alpha_init_scaling * torch.ones(n_embd, dtype=torch.float32))
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.use_nGPT == 0:
             x = x + self.attn_scale * self.attn(rmsnorm(x))
             x = x + self.mlp(rmsnorm(x))
         if self.use_nGPT == 1:
-            x = justnorm(x + self.attn_scale * justnorm(self.attn(x)))
-            x = justnorm(x + justnorm(self.mlp(x)))
+            x_norm = justnorm(x)
+
+            # For attn
+            lr_attn = self.attn_alpha * (self.attn_alpha_init_value * self.attn_alpha_init_scaling)
+            lr_attn = torch.abs(lr_attn)
+            x = x_norm + lr_attn * (justnorm(self.attn(x_norm)) - x_norm)
+            x = justnorm(x)
+
+            # For mlp
+            lr_mlp = self.mlp_alpha * (self.mlp_alpha_init_value * self.mlp_alpha_init_scaling)
+            lr_mlp = torch.abs(lr_mlp)
+            x = x_norm + lr_mlp * (justnorm(self.mlp(x_norm)) - x_norm)
+            x = justnorm(x)
+
         return x
 
 
@@ -201,9 +222,6 @@ class GPT(nn.Module):
 
         if self.use_nGPT == 0:
             x = rmsnorm(x)
-
-        if self.use_nGPT == 1:
-            x = justnorm(x)
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss

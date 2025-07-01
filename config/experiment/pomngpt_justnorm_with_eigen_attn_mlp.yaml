@@ -1,0 +1,10 @@
+# @package _global_
+
+defaults:
+  - override /model: pomgpt
+
+model:
+  gpt:
+    use_nGPT: 1
+
+experiment_name: pomngpt_justnorm_with_eigen_attn_mlp
