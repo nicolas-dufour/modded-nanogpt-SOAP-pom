@@ -10,6 +10,11 @@ torch._dynamo.config.suppress_errors = True
 # Core Polynomial Functions
 # =============================================================================
 
+def justnorm(x0):
+    x = x0.float()
+    x = x / x.norm(p=2, dim=-1, keepdim=True)
+    return x.type_as(x0)
+
 @torch.compile
 def gelu(x: torch.Tensor) -> torch.Tensor:
     """Apply GELU activation function with torch.compile optimization."""
@@ -139,7 +144,7 @@ def polynomial_aggregation_(x: torch.Tensor, k: int, mask: Optional[torch.Tensor
     return h
 
 @torch.compile
-def polynomial_selection_(x: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
+def polynomial_selection_(x: torch.Tensor, h: torch.Tensor, sqk: dict = None, k: int = None, dim: int = None, expand: int = None) -> torch.Tensor:
     """
     Apply polynomial selection with sigmoid gating.
     
@@ -150,13 +155,17 @@ def polynomial_selection_(x: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
     Returns:
         Gated output tensor
     """
-    return F.sigmoid(x) * h
+    if sqk is not None:
+        scale_qk = (sqk["sqk"] * (sqk["init_value"]/sqk["init_scaling"])).view(1, 1, k * dim * expand).to(x.device)
+        x = scale_qk * justnorm(F.sigmoid(x))  
+        h = scale_qk * justnorm(h)
+    return x * h
 
 # =============================================================================
 # Main PoM Function
 # =============================================================================
 
-def pom(xq: torch.Tensor, xc: torch.Tensor, k: int, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+def pom(xq: torch.Tensor, xc: torch.Tensor, k: int, mask: Optional[torch.Tensor] = None, sqk: dict = None, dim: int = None, expand: int = None) -> torch.Tensor:
     """
     Polynomial Mixer (PoM) operation.
     
@@ -173,7 +182,8 @@ def pom(xq: torch.Tensor, xc: torch.Tensor, k: int, mask: Optional[torch.Tensor]
         Output tensor after polynomial mixing
     """
     h = polynomial_aggregation_(xc, k, mask)
-    o = polynomial_selection_(xq, h)
+    o = polynomial_selection_(xq, h, sqk, k, dim, expand)
+
     return o
 
 # =============================================================================
@@ -220,7 +230,7 @@ class PoM(nn.Module):
         self.pom = pom
 
     def forward(self, xq: torch.Tensor, xc: Optional[torch.Tensor] = None, 
-                mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+                mask: Optional[torch.Tensor] = None, sqk: dict = None) -> torch.Tensor:
         """
         Forward pass of the PoM module.
         
@@ -237,7 +247,7 @@ class PoM(nn.Module):
 
         s = self.se_proj(xq)
         h = self.po_proj(xc)
-        sh = self.pom(s, h, self.order, mask)
+        sh = self.pom(s, h, self.order, mask, sqk, self.dim, self.order_expand)
 
         return self.ag_proj(sh)
 
