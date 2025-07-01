@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=justnorm
-#SBATCH --output=logs/justnorm/%j.out
-#SBATCH --error=logs/justnorm/%j.err
+#SBATCH --job-name=justnorm_with_eigen_attn_mlp
+#SBATCH --output=logs/justnorm_with_eigen_attn_mlp/%j.out
+#SBATCH --error=logs/justnorm_with_eigen_attn_mlp/%j.err
 #SBATCH --account=wre@h100
 #SBATCH --constraint=h100
 #SBATCH --qos=qos_gpu_h100-dev

@@ -155,6 +155,7 @@ class Block(nn.Module):
         if self.use_nGPT == 0:
             x = x + self.attn_scale * self.attn(rmsnorm(x))
             x = x + self.mlp(rmsnorm(x))
+            
         if self.use_nGPT == 1:
             x_norm = justnorm(x)
 
