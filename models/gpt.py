@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import models.pom as pom
+from copy import deepcopy
+import math
 
 
 def rmsnorm(x0, eps=1e-6):
@@ -140,6 +142,24 @@ class Block(nn.Module):
     def __init__(self, mixing_layer, n_embd, n_layer, use_nGPT):
         super().__init__()
         self.attn = mixing_layer #CausalSelfPoM(n_embd, degree, expand, n_head)
+        self.attn = deepcopy(mixing_layer) #CausalSelfPoM(n_embd, degree, expand, n_head)
+        # Reinitialize with pytorch defaults
+        for module in self.modules():
+            if isinstance(module, nn.Linear):
+                nn.init.kaiming_uniform_(module.weight, a=math.sqrt(5))
+                if module.bias is not None:
+                    fan_in, _ = nn.init._calculate_fan_in_and_fan_out(module.weight)
+                    bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+                    nn.init.uniform_(module.bias, -bound, bound)
+            elif isinstance(module, nn.Conv1d):
+                nn.init.kaiming_uniform_(module.weight, a=math.sqrt(5))
+                if module.bias is not None:
+                    fan_in, _ = nn.init._calculate_fan_in_and_fan_out(module.weight)
+                    bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+                    nn.init.uniform_(module.bias, -bound, bound)
+            elif isinstance(module, nn.Embedding):
+                nn.init.normal_(module.weight, mean=0, std=1)
+
         self.mlp = MLP(n_embd)
         self.attn_scale = (1 / (2 * n_layer)**0.5)
         self.use_nGPT = use_nGPT
@@ -160,7 +180,7 @@ class Block(nn.Module):
             k = self.attn.degree
             dim = self.attn.n_embd
             expand = self.attn.expand
-            self.sqk = {"init_value": 1.0, 
+            self.sqk = {"init_value": 1.0,
                         "init_scaling": 1 / (n_embd**0.5)}
             self.sqk["sqk"] = nn.Parameter(self.sqk["init_scaling"]*torch.ones(k*dim*expand, dtype=torch.float32))
 
