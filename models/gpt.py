@@ -141,13 +141,16 @@ class Block(nn.Module):
         self.attn_scale = (1 / (2 * n_layer)**0.5)
         self.use_nGPT = use_nGPT
 
+    def justnorm(self, x):
+        return x / x.norm(p=2, dim=-1, keepdim=True)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.use_nGPT == 0:
             x = x + self.attn_scale * self.attn(rmsnorm(x))
             x = x + self.mlp(rmsnorm(x))
         if self.use_nGPT == 1:
-            x = x + self.attn_scale * self.attn(x)
-            x = x + self.mlp(x)
+            x = self.justnorm(x + self.attn_scale * self.justnorm(self.attn(x)))
+            x = self.justnorm(x + self.justnorm(self.mlp(x)))
         return x
 
 
