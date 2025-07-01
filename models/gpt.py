@@ -145,13 +145,20 @@ class Block(nn.Module):
         self.use_nGPT = use_nGPT
 
         if self.use_nGPT == 1:
-            self.attn_alpha_init_value = 0.05
+            # For attn
+            self.attn_alpha_init_value = 0.5
             self.attn_alpha_init_scaling = 1 / (n_embd**0.5)
-            self.attn_alpha = nn.Parameter(self.attn_alpha_init_scaling * torch.ones(n_embd, dtype=torch.float32), requires_grad=True)
+            self.attn_alpha = nn.Parameter(self.attn_alpha_init_scaling * torch.ones(n_embd, dtype=torch.float32))
 
-            self.mlp_alpha_init_value = 0.05
+            # For mlp
+            self.mlp_alpha_init_value = 0.5
             self.mlp_alpha_init_scaling = 1 / (n_embd**0.5)
-            self.mlp_alpha = nn.Parameter(self.mlp_alpha_init_scaling * torch.ones(n_embd, dtype=torch.float32), requires_grad=True)
+            self.mlp_alpha = nn.Parameter(self.mlp_alpha_init_scaling * torch.ones(n_embd, dtype=torch.float32))
+
+            # For q and k: q -> sigmoid(Ws*X), k -> H(X)
+            self.sqk_init_value = 1.0       
+            self.sqk_init_scaling = 1 / (n_embd**0.5)
+            self.sqk = torch.nn.Parameter(self.sqk_init_scaling*torch.ones(n_embd, dtype=torch.float32))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.use_nGPT == 0:

@@ -155,7 +155,7 @@ def main(cfg: DictConfig):
     # Set up wandb (only on rank 0)
     if master_process:
         wandb.init(project="pom_archi", entity="imaginelab", config=dict_cfg, name=cfg.experiment_name)
-        wandb.watch(raw_model, log="all", log_freq=5)
+        wandb.watch(raw_model, log="all", log_freq=10)
     
     # Set up context manager for mixed precision
     ctx = torch.amp.autocast(device_type='cuda', dtype=getattr(torch, cfg.hardware.dtype))
