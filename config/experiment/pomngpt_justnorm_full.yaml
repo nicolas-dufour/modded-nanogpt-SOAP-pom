@@ -1,0 +1,14 @@
+# @package _global_
+
+defaults:
+  - override /model: pomgpt
+
+training:
+  warmup_iters: 0
+  weight_decay: 0
+
+model:
+  gpt:
+    use_nGPT: 1
+
+experiment_name: pomngpt_full
