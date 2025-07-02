@@ -157,9 +157,13 @@ def polynomial_selection_(x: torch.Tensor, h: torch.Tensor, sqk: dict = None, k:
     """
     if sqk is not None:
         scale_qk = (sqk["sqk"] * (sqk["init_value"]/sqk["init_scaling"])).view(1, 1, k * dim * expand).to(x.device)
-        x = scale_qk * justnorm(F.sigmoid(x))  
+        x = scale_qk * justnorm(F.sigmoid(x))
         h = scale_qk * justnorm(h)
-    return x * h
+
+        return x * h
+
+    return F.sigmoid(x) * h
+    
 
 # =============================================================================
 # Main PoM Function

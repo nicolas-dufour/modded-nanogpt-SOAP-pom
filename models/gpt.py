@@ -125,15 +125,26 @@ class CausalSelfAttention(nn.Module):
 class MLP(nn.Module):
     """Multi-layer perceptron block."""
     
-    def __init__(self, n_embd):
+    def __init__(self, n_embd, use_nGPT):
         super().__init__()
+        self.n_embd = n_embd
+        self.use_nGPT = use_nGPT
         self.c_fc = nn.Linear(n_embd, 4 * n_embd, bias=False)
-        self.c_proj = nn.Linear(4 * n_embd, n_embd, bias=False)
+        self.c_proj = nn.Linear(2 * n_embd, n_embd, bias=False)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.c_fc(x)
-        x = F.gelu(x)
-        x = self.c_proj(x)
+    def forward(self, x: torch.Tensor, suv: torch.Tensor = None) -> torch.Tensor:
+        if self.use_nGPT == 0:
+            x = self.c_fc(x)
+            x = F.gelu(x)
+            x = self.c_proj(x)
+
+        if self.use_nGPT == 1:
+            x = self.c_fc(x)
+            suv = (suv["suv"] * ((suv["init_value"] / suv["init_scaling"]) * (self.n_embd ** 0.5))).to(x.device)
+            x = suv * x
+            u, v = torch.chunk(x, 2, dim=-1)
+            x = u * F.gelu(v)
+            x = self.c_proj(x)
         return x
 
 class Block(nn.Module):
@@ -160,21 +171,26 @@ class Block(nn.Module):
             elif isinstance(module, nn.Embedding):
                 nn.init.normal_(module.weight, mean=0, std=1)
 
-        self.mlp = MLP(n_embd)
+        self.mlp = MLP(n_embd, use_nGPT)
         self.attn_scale = (1 / (2 * n_layer)**0.5)
         self.use_nGPT = use_nGPT
         self.sqk = None
 
         if self.use_nGPT == 1:
             # For attn
-            self.attn_alpha_init_value = 0.5
+            self.attn_alpha_init_value = 0.05
             self.attn_alpha_init_scaling = 1 / (n_embd**0.5)
             self.attn_alpha = nn.Parameter(self.attn_alpha_init_scaling * torch.ones(n_embd, dtype=torch.float32))
 
-            # For mlp
-            self.mlp_alpha_init_value = 0.5
+            # For mlp output
+            self.mlp_alpha_init_value = 0.05
             self.mlp_alpha_init_scaling = 1 / (n_embd**0.5)
             self.mlp_alpha = nn.Parameter(self.mlp_alpha_init_scaling * torch.ones(n_embd, dtype=torch.float32))
+
+            # For mlp intermediate layers
+            self.suv = {"init_value": 1.0,
+                        "init_scaling": 1.0}
+            self.suv["suv"] = nn.Parameter(self.suv["init_scaling"] * torch.ones(4 * n_embd, dtype=torch.float32))
 
             # For q and k: q -> sigmoid(Ws*X), k -> H(X)
             k = self.attn.degree
@@ -193,15 +209,15 @@ class Block(nn.Module):
             x_norm = justnorm(x)
 
             # For attn
-            lr_attn = self.attn_alpha * (self.attn_alpha_init_value * self.attn_alpha_init_scaling)
+            lr_attn = self.attn_alpha * (self.attn_alpha_init_value / self.attn_alpha_init_scaling)
             lr_attn = torch.abs(lr_attn)
             x_attn = x_norm + lr_attn * (justnorm(self.attn(x_norm, self.sqk)) - x_norm)
             x_attn = justnorm(x_attn)
 
             # For mlp
-            lr_mlp = self.mlp_alpha * (self.mlp_alpha_init_value * self.mlp_alpha_init_scaling)
+            lr_mlp = self.mlp_alpha * (self.mlp_alpha_init_value / self.mlp_alpha_init_scaling)
             lr_mlp = torch.abs(lr_mlp)
-            x_mlp = x_attn + lr_mlp * (justnorm(self.mlp(x_attn)) - x_attn)
+            x_mlp = x_attn + lr_mlp * (justnorm(self.mlp(x_attn, self.suv)) - x_attn)
             x_mlp = justnorm(x_mlp)
 
         return x_mlp
