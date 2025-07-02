@@ -248,6 +248,66 @@ class GPT(nn.Module):
             self.sz_init_scaling = 1 / (self.n_embd**0.5)
             self.sz = torch.nn.Parameter(self.sz_init_scaling*torch.ones(self.vocab_size, dtype=torch.float32))
 
+        # --- HOOKS FOR STATISTICS ---
+        self._stat_storage = {}
+        self._register_stat_hooks()
+
+    def _register_stat_hooks(self):
+        """Register hooks to collect statistics on weights, activations, and gradients."""
+        def save_activation_stats(name):
+            def hook(module, input, output):
+                if isinstance(output, torch.Tensor):
+                    stat = output.detach().float()
+                    self._stat_storage.setdefault('activations', {})[name] = {
+                        'mean': stat.mean().item(),
+                        # 'std': stat.std().item(),
+                        # 'max': stat.max().item(),
+                        # 'min': stat.min().item(),
+                    }
+            return hook
+        def save_gradient_stats(name):
+            def hook(module, grad_input, grad_output):
+                if grad_output and isinstance(grad_output[0], torch.Tensor):
+                    stat = grad_output[0].detach().float()
+                    self._stat_storage.setdefault('gradients', {})[name] = {
+                        'mean': stat.mean().item(),
+                        # 'std': stat.std().item(),
+                        # 'max': stat.max().item(),
+                        # 'min': stat.min().item(),
+                    }
+            return hook
+        def save_weight_stats(name, param):
+            stat = param.detach().float()
+            self._stat_storage.setdefault('weights', {})[name] = {
+                'mean': stat.mean().item(),
+                # 'std': stat.std().item(),
+                # 'max': stat.max().item(),
+                # 'min': stat.min().item(),
+            }
+        # Register hooks for all submodules
+        for name, module in self.named_modules():
+            if isinstance(module, (nn.Linear, nn.LayerNorm, nn.Embedding)):
+                module.register_forward_hook(save_activation_stats(name))
+                module.register_full_backward_hook(save_gradient_stats(name))
+        # Register weight stats (no hook needed, just collect on demand)
+        self._weight_stat_names = [n for n, p in self.named_parameters()]
+
+    def collect_weight_stats(self):
+        for name, param in self.named_parameters():
+            if param.requires_grad:
+                stat = param.detach().float()
+                self._stat_storage.setdefault('weights', {})[name] = {
+                    'mean': stat.mean().item(),
+                    # 'std': stat.std().item(),
+                    # 'max': stat.max().item(),
+                    # 'min': stat.min().item(),
+                }
+
+    def get_and_clear_stats(self):
+        stats = self._stat_storage.copy()
+        self._stat_storage.clear()
+        return stats
+
     def forward(self, idx: torch.Tensor, targets: torch.Tensor = None, return_logits: bool = True):
         """
         Forward pass of the GPT model.

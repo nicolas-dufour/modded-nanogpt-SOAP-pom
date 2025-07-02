@@ -95,15 +95,14 @@ def normalize_matrices(model):
         block.mlp.c_fc.weight.data.copy_(justnorm(block.mlp.c_fc.weight.data, 1))  # (n_embd, 4 * n_embd)
         block.mlp.c_proj.weight.data.copy_(justnorm(block.mlp.c_proj.weight.data, 0))  # (4 * n_embd, n_embd)
 
-def log_w_magnitudes(model, wandb, step):
-    for name, param in model.named_parameters():
-        if "weight" in name:
-            wandb.log({f"weights/{name}": param.norm() / param.numel()}, step=step)
-
-
-def log_act_magnitudes(model, wandb, step):
-    # TODO: log the magnitudes of the activations of the model
-    pass
+def log_stats(model, wandb, step):
+    # Collect and log statistics from hooks
+    model.collect_weight_stats()
+    stats = model.get_and_clear_stats()
+    for stat_type, stat_dict in stats.items():
+        for name, values in stat_dict.items():
+            for k, v in values.items():
+                wandb.log({f"{stat_type}/{name}/{k}": v, "step": step})
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg: DictConfig):
@@ -232,8 +231,7 @@ def main(cfg: DictConfig):
                     with open(logfile, "a") as f:
                         f.write(f"s:{step} tel:{val_loss}\n")
 
-                log_w_magnitudes(raw_model, wandb, step)
-                log_act_magnitudes(raw_model, wandb, step)
+                log_stats(raw_model, wandb, step)
         
         # Save checkpoint
         if master_process and (last_step or (cfg.evaluation.save_every > 0 and step % cfg.evaluation.save_every == 0)):
