@@ -243,6 +243,11 @@ class GPT(nn.Module):
         self.transformer.wte.weight = self.lm_head.weight  # weight tying
         self.rotary = Rotary(self.head_dim)
 
+        if self.use_nGPT == 1:
+            self.sz_init_value = 1.0
+            self.sz_init_scaling = 1 / (self.n_embd**0.5)
+            self.sz = torch.nn.Parameter(self.sz_init_scaling*torch.ones(self.vocab_size, dtype=torch.float32))
+
     def forward(self, idx: torch.Tensor, targets: torch.Tensor = None, return_logits: bool = True):
         """
         Forward pass of the GPT model.
@@ -277,11 +282,17 @@ class GPT(nn.Module):
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
             logits = logits.float()  # use tf32/fp32 for logits
+            if self.use_nGPT == 1:
+                sz = self.sz * (self.sz_init_value/self.sz_init_scaling)
+                logits = sz * logits
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.lm_head(x[:, [-1], :])  # note: using list [-1] to preserve the time dim
             logits = logits.float()  # use tf32/fp32 for logits
+            if self.use_nGPT == 1:
+                sz = self.sz * (self.sz_init_value/self.sz_init_scaling)
+                logits = sz * logits
             loss = None
 
         # there are performance reasons why not returning logits is prudent, if not needed
