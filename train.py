@@ -336,6 +336,10 @@ def main(cfg: DictConfig):
         log_dir.mkdir(parents=True, exist_ok=True)
         logfile = log_dir / "log.txt"
         logfile.touch()  # create empty log file
+        
+        # Set up checkpoint directory
+        checkpoint_dir = Path("checkpoints") / cfg.experiment_name
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
     
     # Set up rich progress bar (only for master process)
     console = Console()
@@ -465,7 +469,7 @@ def main(cfg: DictConfig):
                 'model': raw_model.state_dict(),
                 'optimizer': optimizer.state_dict()
             }
-            torch.save(checkpoint, log_dir / f'state_step{step:06d}.pt')
+            torch.save(checkpoint, checkpoint_dir / "last.ckpt")
         
         if last_step:
             break

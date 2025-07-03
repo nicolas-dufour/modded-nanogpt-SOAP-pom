@@ -42,6 +42,7 @@ for model_name, model_override in models.items():
             "experiment": model_override,
             "training.num_iterations": 7000,
             "training.warmdown_iters": 2000,
+            "training.learning_rate": 0.0005,
             "training.batch_size": 48,
             "training.accumulation": 2,
         }
