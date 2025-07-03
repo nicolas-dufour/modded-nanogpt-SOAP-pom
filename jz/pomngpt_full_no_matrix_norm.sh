@@ -25,5 +25,4 @@ export WANDB_MODE=offline
 
 set -x
 srun torchrun --standalone --nproc_per_node=4 train.py \
-     experiment=pomngpt_full_no_matrix_norm \
-     training.batch_size=32 \
+     experiment=pomngpt_full_no_matrix_norm

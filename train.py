@@ -93,7 +93,7 @@ def normalize_matrices(model):
 
         # For mlp
         block.mlp.c_fc.weight.data.copy_(justnorm(block.mlp.c_fc.weight.data, 1))  # (n_embd, 4 * n_embd)
-        block.mlp.c_proj.weight.data.copy_(justnorm(block.mlp.c_proj.weight.data, 0))  # (4 * n_embd, n_embd)
+        block.mlp.c_proj.weight.data.copy_(justnorm(block.mlp.c_proj.weight.data, 0))  # (2 * n_embd, n_embd)
 
 def log_stats(model, wandb, step):
     # Collect and log statistics from hooks
@@ -231,7 +231,8 @@ def main(cfg: DictConfig):
                     with open(logfile, "a") as f:
                         f.write(f"s:{step} tel:{val_loss}\n")
 
-                log_stats(raw_model, wandb, step)
+                if cfg.training.log_stats == 1:
+                    log_stats(raw_model, wandb, step)
         
         # Save checkpoint
         if master_process and (last_step or (cfg.evaluation.save_every > 0 and step % cfg.evaluation.save_every == 0)):
