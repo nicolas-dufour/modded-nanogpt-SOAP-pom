@@ -125,10 +125,11 @@ class CausalSelfAttention(nn.Module):
 class MLP(nn.Module):
     """Multi-layer perceptron block."""
     
-    def __init__(self, n_embd, use_nGPT):
+    def __init__(self, n_embd, use_nGPT, use_suv):
         super().__init__()
         self.n_embd = n_embd
         self.use_nGPT = use_nGPT
+        self.use_suv = use_suv
         self.c_fc = nn.Linear(n_embd, 4 * n_embd, bias=False)
         self.c_proj = nn.Linear(2 * n_embd, n_embd, bias=False)
 
@@ -138,10 +139,11 @@ class MLP(nn.Module):
             x = F.gelu(x)
             x = self.c_proj(x)
 
-        if self.use_nGPT == 1:
+        if self.use_nGPT == 1:  # SwiGLU activation function
             x = self.c_fc(x)
-            suv = (suv["suv"] * ((suv["init_value"] / suv["init_scaling"]) * (self.n_embd ** 0.5))).to(x.device)
-            x = suv * x
+            if self.use_suv == 1:
+                suv = (suv["suv"] * ((suv["init_value"] / suv["init_scaling"]) * (self.n_embd ** 0.5))).to(x.device)
+                x = suv * x
             u, v = torch.chunk(x, 2, dim=-1)
             x = u * F.gelu(v)
             x = self.c_proj(x)
@@ -150,7 +152,7 @@ class MLP(nn.Module):
 class Block(nn.Module):
     """Transformer block with PoM attention and MLP."""
     
-    def __init__(self, mixing_layer, n_embd, n_layer, use_nGPT):
+    def __init__(self, mixing_layer, n_embd, n_layer, use_nGPT, use_attn_alpha, use_attn_mlp, use_suv):
         super().__init__()
         self.attn = mixing_layer #CausalSelfPoM(n_embd, degree, expand, n_head)
         self.attn = deepcopy(mixing_layer) #CausalSelfPoM(n_embd, degree, expand, n_head)
@@ -171,25 +173,31 @@ class Block(nn.Module):
             elif isinstance(module, nn.Embedding):
                 nn.init.normal_(module.weight, mean=0, std=1)
 
-        self.mlp = MLP(n_embd, use_nGPT)
         self.attn_scale = (1 / (2 * n_layer)**0.5)
         self.use_nGPT = use_nGPT
+        self.use_attn_alpha = use_attn_alpha
+        self.use_attn_mlp = use_attn_mlp
+        self.use_suv = use_suv
+        self.mlp = MLP(n_embd, use_nGPT, use_suv)
 
         if self.use_nGPT == 1:
             # For attn
-            self.attn_alpha_init_value = 0.05
-            self.attn_alpha_init_scaling = 1 / (n_embd**0.5)
-            self.attn_alpha = nn.Parameter(self.attn_alpha_init_scaling * torch.ones(n_embd, dtype=torch.float32))
+            if self.use_attn_alpha == 1:
+                self.attn_alpha_init_value = 0.05
+                self.attn_alpha_init_scaling = 1 / (n_embd**0.5)
+                self.attn_alpha = nn.Parameter(self.attn_alpha_init_scaling * torch.ones(n_embd, dtype=torch.float32))
 
             # For mlp output
-            self.mlp_alpha_init_value = 0.05
-            self.mlp_alpha_init_scaling = 1 / (n_embd**0.5)
-            self.mlp_alpha = nn.Parameter(self.mlp_alpha_init_scaling * torch.ones(n_embd, dtype=torch.float32))
+            if self.use_attn_mlp == 1:
+                self.mlp_alpha_init_value = 0.05
+                self.mlp_alpha_init_scaling = 1 / (n_embd**0.5)
+                self.mlp_alpha = nn.Parameter(self.mlp_alpha_init_scaling * torch.ones(n_embd, dtype=torch.float32))
 
             # For mlp intermediate layers
-            self.suv = {"init_value": 1.0,
-                        "init_scaling": 1.0}
-            self.suv["suv"] = nn.Parameter(self.suv["init_scaling"] * torch.ones(4 * n_embd, dtype=torch.float32))
+            if self.use_suv == 1:
+                self.suv = {"init_value": 1.0,
+                            "init_scaling": 1.0}
+                self.suv["suv"] = nn.Parameter(self.suv["init_scaling"] * torch.ones(4 * n_embd, dtype=torch.float32))
 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -201,24 +209,34 @@ class Block(nn.Module):
             x_norm = justnorm(x)
 
             # For attn
-            lr_attn = self.attn_alpha * (self.attn_alpha_init_value / self.attn_alpha_init_scaling)
-            lr_attn = torch.abs(lr_attn)
-            x_attn = x_norm + lr_attn * (justnorm(self.attn(x_norm)) - x_norm)
-            x_attn = justnorm(x_attn)
+            if self.use_attn_alpha == 1:
+                lr_attn = self.attn_alpha * (self.attn_alpha_init_value / self.attn_alpha_init_scaling)
+                lr_attn = torch.abs(lr_attn)
+                x_attn = x_norm + lr_attn * (justnorm(self.attn(x_norm)) - x_norm)
+                x_norm = justnorm(x_attn)
+            
+            else:
+                x_attn = x_norm + justnorm(self.attn(x_norm))
+                x_norm = justnorm(x_attn)
 
             # For mlp
-            lr_mlp = self.mlp_alpha * (self.mlp_alpha_init_value / self.mlp_alpha_init_scaling)
-            lr_mlp = torch.abs(lr_mlp)
-            x_mlp = x_attn + lr_mlp * (justnorm(self.mlp(x_attn, self.suv)) - x_attn)
-            x_mlp = justnorm(x_mlp)
+            if self.use_attn_mlp == 1:
+                lr_mlp = self.mlp_alpha * (self.mlp_alpha_init_value / self.mlp_alpha_init_scaling)
+                lr_mlp = torch.abs(lr_mlp)
+                x_mlp = x_norm + lr_mlp * (justnorm(self.mlp(x_norm, self.suv)) - x_norm)
+                x_norm = justnorm(x_mlp)
 
-        return x_mlp
+            else:
+                x_mlp = x_norm + justnorm(self.mlp(x_norm, self.suv))
+                x_norm = justnorm(x_mlp)
+
+        return x_norm
 
 
 class GPT(nn.Module):
     """GPT model with Polynomial Mixer attention."""
     
-    def __init__(self, mixing_layer, vocab_size: int = 50257, n_layer: int = 12, n_head: int = 12, n_embd: int = 768, use_nGPT: int = 0):
+    def __init__(self, mixing_layer, vocab_size: int = 50257, n_layer: int = 12, n_head: int = 12, n_embd: int = 768, use_nGPT: int = 0, use_attn_alpha: int = 0, use_attn_mlp: int = 0, use_suv: int = 0):
         super().__init__()
         self.vocab_size = vocab_size
         self.n_layer = n_layer
@@ -226,10 +244,13 @@ class GPT(nn.Module):
         self.n_embd = n_embd
         self.use_nGPT = use_nGPT
         self.head_dim = self.n_embd // self.n_head
+        self.use_attn_alpha = use_attn_alpha
+        self.use_attn_mlp = use_attn_mlp
+        self.use_suv = use_suv
 
         self.transformer = nn.ModuleDict(dict(
             wte=nn.Embedding(self.vocab_size, self.n_embd),
-            h=nn.ModuleList([Block(mixing_layer, self.n_embd, self.n_layer, self.use_nGPT) for _ in range(self.n_layer)]),
+            h=nn.ModuleList([Block(mixing_layer, self.n_embd, self.n_layer, self.use_nGPT, self.use_attn_alpha, self.use_attn_mlp, self.use_suv) for _ in range(self.n_layer)]),
         ))
         self.lm_head = nn.Linear(self.n_embd, self.vocab_size, bias=False)
         self.transformer.wte.weight = self.lm_head.weight  # weight tying

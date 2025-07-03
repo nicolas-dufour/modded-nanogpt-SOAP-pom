@@ -13,3 +13,6 @@ model:
     n_head: ${model.n_head}
     n_embd: ${model.n_embd}
     use_nGPT: 0
+    use_attn_alpha: 0
+    use_attn_mlp: 0
+    use_suv: 0

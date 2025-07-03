@@ -147,7 +147,7 @@ def main(cfg: DictConfig):
     model = instantiate(cfg.model.gpt)
     model = model.cuda()
 
-    if cfg.model.gpt.use_nGPT == 1:
+    if cfg.training.normalize_matrices == 1:
         normalize_matrices(model)
     
     if hasattr(config, "coordinate_descent_tuning"):
@@ -278,7 +278,7 @@ def main(cfg: DictConfig):
         torch.cuda.synchronize()
         t1 = time.time()
 
-        if cfg.model.gpt.use_nGPT == 1:
+        if cfg.training.normalize_matrices == 1:
             normalize_matrices(raw_model)
         
         # Logging

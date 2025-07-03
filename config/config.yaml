@@ -15,6 +15,7 @@ training:
   warmup_iters: 250
   warmdown_iters: 0
   weight_decay: 0.5
+  normalize_matrices: 0
 
 # Evaluation configuration
 evaluation:
