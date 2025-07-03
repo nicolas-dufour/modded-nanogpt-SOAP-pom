@@ -236,7 +236,7 @@ class Block(nn.Module):
 class GPT(nn.Module):
     """GPT model with Polynomial Mixer attention."""
     
-    def __init__(self, mixing_layer, vocab_size: int = 50257, n_layer: int = 12, n_head: int = 12, n_embd: int = 768, use_nGPT: int = 0, use_attn_alpha: int = 0, use_attn_mlp: int = 0, use_suv: int = 0):
+    def __init__(self, mixing_layer, vocab_size: int = 50257, n_layer: int = 12, n_head: int = 12, n_embd: int = 768, use_nGPT: int = 0, use_attn_alpha: int = 0, use_attn_mlp: int = 0, use_suv: int = 0, log_stats: int = 0):
         super().__init__()
         self.vocab_size = vocab_size
         self.n_layer = n_layer
@@ -247,6 +247,7 @@ class GPT(nn.Module):
         self.use_attn_alpha = use_attn_alpha
         self.use_attn_mlp = use_attn_mlp
         self.use_suv = use_suv
+        self.log_stats = log_stats
 
         self.transformer = nn.ModuleDict(dict(
             wte=nn.Embedding(self.vocab_size, self.n_embd),
@@ -262,8 +263,9 @@ class GPT(nn.Module):
             self.sz = torch.nn.Parameter(self.sz_init_scaling*torch.ones(self.vocab_size, dtype=torch.float32))
 
         # --- HOOKS FOR STATISTICS ---
-        self._stat_storage = {}
-        self._register_stat_hooks()
+        if self.log_stats == 1:
+            self._stat_storage = {}
+            self._register_stat_hooks()
 
     def _register_stat_hooks(self):
         """Register hooks to collect statistics on weights, activations, and gradients."""

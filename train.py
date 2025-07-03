@@ -231,7 +231,7 @@ def main(cfg: DictConfig):
                     with open(logfile, "a") as f:
                         f.write(f"s:{step} tel:{val_loss}\n")
 
-                if cfg.training.log_stats == 1:
+                if cfg.model.gpt.log_stats == 1:
                     log_stats(raw_model, wandb, step)
         
         # Save checkpoint

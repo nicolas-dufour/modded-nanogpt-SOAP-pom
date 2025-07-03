@@ -16,7 +16,6 @@ training:
   warmdown_iters: 0
   weight_decay: 0.5
   normalize_matrices: 0
-  log_stats: 0
 
 # Evaluation configuration
 evaluation:

@@ -16,3 +16,4 @@ model:
     use_attn_alpha: 0
     use_attn_mlp: 0
     use_suv: 0
+    log_stats: 0

@@ -27,3 +27,4 @@ set -x
 srun torchrun --standalone --nproc_per_node=4 train.py \
      experiment=pomngpt_full \
      training.batch_size=32 \
+     training.accumulation=3
