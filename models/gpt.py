@@ -84,10 +84,10 @@ class CausalSelfPoM(nn.Module):
         self.head_dim = self.n_embd // self.n_head
         self.pom = pom.PoM(self.n_embd, self.degree, self.expand, False)
 
-    def forward(self, x: torch.Tensor, sqk: dict) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, T, C = x.size()
         mask = torch.tril(torch.ones((T, T))).unsqueeze(0)
-        return self.pom(x, x, mask, sqk)
+        return self.pom(x, x, mask)
 
 class CausalSelfAttention(nn.Module):
 
@@ -174,7 +174,6 @@ class Block(nn.Module):
         self.mlp = MLP(n_embd, use_nGPT)
         self.attn_scale = (1 / (2 * n_layer)**0.5)
         self.use_nGPT = use_nGPT
-        self.sqk = None
 
         if self.use_nGPT == 1:
             # For attn
@@ -192,13 +191,6 @@ class Block(nn.Module):
                         "init_scaling": 1.0}
             self.suv["suv"] = nn.Parameter(self.suv["init_scaling"] * torch.ones(4 * n_embd, dtype=torch.float32))
 
-            # For q and k: q -> sigmoid(Ws*X), k -> H(X)
-            k = self.attn.degree
-            dim = self.attn.n_embd
-            expand = self.attn.expand
-            self.sqk = {"init_value": 1.0,
-                        "init_scaling": 1 / (n_embd**0.5)}
-            self.sqk["sqk"] = nn.Parameter(self.sqk["init_scaling"]*torch.ones(k*dim*expand, dtype=torch.float32))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.use_nGPT == 0:
@@ -211,7 +203,7 @@ class Block(nn.Module):
             # For attn
             lr_attn = self.attn_alpha * (self.attn_alpha_init_value / self.attn_alpha_init_scaling)
             lr_attn = torch.abs(lr_attn)
-            x_attn = x_norm + lr_attn * (justnorm(self.attn(x_norm, self.sqk)) - x_norm)
+            x_attn = x_norm + lr_attn * (justnorm(self.attn(x_norm)) - x_norm)
             x_attn = justnorm(x_attn)
 
             # For mlp
@@ -260,9 +252,9 @@ class GPT(nn.Module):
                     stat = output.detach().float()
                     self._stat_storage.setdefault('activations', {})[name] = {
                         'mean': stat.mean().item(),
-                        # 'std': stat.std().item(),
-                        # 'max': stat.max().item(),
-                        # 'min': stat.min().item(),
+                        'std': stat.std().item(),
+                        'max': stat.max().item(),
+                        'min': stat.min().item(),
                     }
             return hook
         def save_gradient_stats(name):
@@ -271,18 +263,18 @@ class GPT(nn.Module):
                     stat = grad_output[0].detach().float()
                     self._stat_storage.setdefault('gradients', {})[name] = {
                         'mean': stat.mean().item(),
-                        # 'std': stat.std().item(),
-                        # 'max': stat.max().item(),
-                        # 'min': stat.min().item(),
+                        'std': stat.std().item(),
+                        'max': stat.max().item(),
+                        'min': stat.min().item(),
                     }
             return hook
         def save_weight_stats(name, param):
             stat = param.detach().float()
             self._stat_storage.setdefault('weights', {})[name] = {
                 'mean': stat.mean().item(),
-                # 'std': stat.std().item(),
-                # 'max': stat.max().item(),
-                # 'min': stat.min().item(),
+                'std': stat.std().item(),
+                'max': stat.max().item(),
+                'min': stat.min().item(),
             }
         # Register hooks for all submodules
         for name, module in self.named_modules():
@@ -298,9 +290,9 @@ class GPT(nn.Module):
                 stat = param.detach().float()
                 self._stat_storage.setdefault('weights', {})[name] = {
                     'mean': stat.mean().item(),
-                    # 'std': stat.std().item(),
-                    # 'max': stat.max().item(),
-                    # 'min': stat.min().item(),
+                    'std': stat.std().item(),
+                    'max': stat.max().item(),
+                    'min': stat.min().item(),
                 }
 
     def get_and_clear_stats(self):
