@@ -4,6 +4,9 @@ defaults:
   - override /model: pomgpt
 
 training:
+  batch_size: 32
+  accumulation: 3
+  num_iterations: 1500
   warmup_iters: 0
   weight_decay: 0
   normalize_matrices: 1
