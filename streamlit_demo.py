@@ -204,7 +204,6 @@ def generate_text(model, prompt_text, max_tokens, temperature, top_k, device):
             temperature=temperature,
             top_k=top_k,
             device=device,
-            generator=generator
         )
         generation_time = time.time() - start_time
     
