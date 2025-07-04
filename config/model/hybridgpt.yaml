@@ -1,0 +1,14 @@
+defaults:
+ - mixing_layer: pom
+ - mixing_layer_alternate: self-attention
+ - _self_
+ - gpt: hybrid_d12
+
+
+vocab_size: 50257
+n_layer: 12
+n_head: 12
+degree: 2
+expand: 2
+n_embd: 768 
+pom_to_sa_ratio: 5

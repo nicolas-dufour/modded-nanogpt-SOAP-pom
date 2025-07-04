@@ -1,0 +1,16 @@
+# @package _global_
+
+model:
+  n_layer: 12
+  n_head: 12
+  n_embd: 768
+
+  gpt:
+    _target_: models.alternate_gpt.AlternateGPT
+    mixing_layer: ${model.mixing_layer}
+    mixing_layer_alternate: ${model.mixing_layer_alternate}
+    vocab_size: ${model.vocab_size}
+    n_layer: ${model.n_layer}
+    n_head: ${model.n_head}
+    n_embd: ${model.n_embd}
+    pom_to_sa_ratio: ${model.pom_to_sa_ratio}
