@@ -4,6 +4,8 @@ defaults:
   - override /model: pomgpt
 
 training:
+  batch_size: 32
+  accumulation: 3
   warmup_iters: 0
   weight_decay: 0
   normalize_matrices: 0
@@ -14,5 +16,6 @@ model:
     use_attn_alpha: 1
     use_attn_mlp: 1
     use_suv: 1
+    log_stats: 1
 
 experiment_name: pomngpt_full_no_matrix_norm

@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch._dynamo
 from typing import Optional, Tuple, Dict, Any
+import math
 
 torch._dynamo.config.suppress_errors = True
 
@@ -144,7 +145,7 @@ def polynomial_aggregation_(x: torch.Tensor, k: int, mask: Optional[torch.Tensor
     return h
 
 @torch.compile
-def polynomial_selection_(x: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
+def polynomial_selection_(x: torch.Tensor, h: torch.Tensor, use_scaling: int = 0) -> torch.Tensor:
     """
     Apply polynomial selection with sigmoid gating.
     
@@ -155,14 +156,17 @@ def polynomial_selection_(x: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
     Returns:
         Gated output tensor
     """
-    return F.sigmoid(x) * h
+    scale = 1.0
+    if use_scaling:
+        scale = math.sqrt(x.shape[-1])
+    return F.sigmoid(x * scale) * h  # Add scaling factor
     
 
 # =============================================================================
 # Main PoM Function
 # =============================================================================
 
-def pom(xq: torch.Tensor, xc: torch.Tensor, k: int, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+def pom(xq: torch.Tensor, xc: torch.Tensor, k: int, mask: Optional[torch.Tensor] = None, use_scaling: int = 0) -> torch.Tensor:
     """
     Polynomial Mixer (PoM) operation.
     
@@ -179,7 +183,7 @@ def pom(xq: torch.Tensor, xc: torch.Tensor, k: int, mask: Optional[torch.Tensor]
         Output tensor after polynomial mixing
     """
     h = polynomial_aggregation_(xc, k, mask)
-    o = polynomial_selection_(xq, h)
+    o = polynomial_selection_(xq, h, use_scaling)
 
     return o
 
@@ -205,7 +209,7 @@ class PoM(nn.Module):
         pom (callable): The polynomial mixer operation function
     """
     
-    def __init__(self, dim: int, degree: int, expand: int, bias: bool = True):
+    def __init__(self, dim: int, degree: int, expand: int, bias: bool = True, use_scaling: int = 0):
         """
         Initialize the PoM module.
         
@@ -219,6 +223,7 @@ class PoM(nn.Module):
         self.dim = dim
         self.order = degree
         self.order_expand = expand
+        self.use_scaling = use_scaling
 
         # Linear projections
         self.po_proj = nn.Linear(dim, degree * expand * dim, bias=bias)
@@ -244,7 +249,7 @@ class PoM(nn.Module):
 
         s = self.se_proj(xq)
         h = self.po_proj(xc)
-        sh = self.pom(s, h, self.order, mask)
+        sh = self.pom(s, h, self.order, mask, self.use_scaling)
 
         return self.ag_proj(sh)
 

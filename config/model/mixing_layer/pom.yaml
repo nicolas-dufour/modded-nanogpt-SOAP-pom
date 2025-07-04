@@ -3,3 +3,4 @@ n_embd: ${model.n_embd}
 degree: ${model.degree}
 expand: ${model.expand}
 n_head: ${model.n_head}
+use_scaling: 0

@@ -3,10 +3,14 @@
 defaults:
   - override /model: pomgpt
 
-
 training:
-  batch_size: 48
-  accumulation: 2
+  batch_size: 32
+  accumulation: 3
   num_iterations: 1500
+
+model:
+  gpt:
+    log_stats: 1
+    use_scaling: 0
 
 experiment_name: baseline_pom

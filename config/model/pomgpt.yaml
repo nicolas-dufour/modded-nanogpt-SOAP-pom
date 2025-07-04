@@ -8,4 +8,5 @@ n_layer: 12
 n_head: 12
 degree: 2
 expand: 2
-n_embd: 768 
+n_embd: 768
+use_scaling: 0

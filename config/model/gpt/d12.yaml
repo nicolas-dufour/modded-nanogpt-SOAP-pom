@@ -4,7 +4,8 @@ model:
   n_layer: 12
   n_head: 12
   n_embd: 768
-
+  use_scaling: 0
+  
   gpt:
     _target_: models.gpt.GPT
     mixing_layer: ${model.mixing_layer}
@@ -12,6 +13,7 @@ model:
     n_layer: ${model.n_layer}
     n_head: ${model.n_head}
     n_embd: ${model.n_embd}
+    use_scaling: ${model.use_scaling}
     use_nGPT: 0
     use_attn_alpha: 0
     use_attn_mlp: 0

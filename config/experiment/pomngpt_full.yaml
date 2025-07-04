@@ -7,7 +7,6 @@ training:
   warmup_iters: 0
   weight_decay: 0
   normalize_matrices: 1
-  learning_rate: 0.018
 
 model:
   gpt:
@@ -15,5 +14,6 @@ model:
     use_attn_alpha: 1
     use_attn_mlp: 1
     use_suv: 1
+    log_stats: 1
 
 experiment_name: pomngpt_full

@@ -75,14 +75,14 @@ def apply_rotary_emb(x, cos, sin):
 class CausalSelfPoM(nn.Module):
     """Causal self-attention using Polynomial Mixer."""
     
-    def __init__(self, n_embd, degree, expand, n_head):
+    def __init__(self, n_embd, degree, expand, n_head, use_scaling):
         super().__init__()
         self.degree = degree
         self.expand = expand
         self.n_head = n_head
         self.n_embd = n_embd
         self.head_dim = self.n_embd // self.n_head
-        self.pom = pom.PoM(self.n_embd, self.degree, self.expand, False)
+        self.pom = pom.PoM(self.n_embd, self.degree, self.expand, False, use_scaling)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, T, C = x.size()
@@ -131,7 +131,7 @@ class MLP(nn.Module):
         self.use_nGPT = use_nGPT
         self.use_suv = use_suv
         self.c_fc = nn.Linear(n_embd, 4 * n_embd, bias=False)
-        self.c_proj = nn.Linear(2 * n_embd, n_embd, bias=False)
+        self.c_proj = nn.Linear(2 * n_embd, n_embd, bias=False) if use_nGPT else nn.Linear(4 * n_embd, n_embd, bias=False)
 
     def forward(self, x: torch.Tensor, suv: torch.Tensor = None) -> torch.Tensor:
         if self.use_nGPT == 0:
@@ -145,14 +145,14 @@ class MLP(nn.Module):
                 suv = (suv["suv"] * ((suv["init_value"] / suv["init_scaling"]) * (self.n_embd ** 0.5))).to(x.device)
                 x = suv * x
             u, v = torch.chunk(x, 2, dim=-1)
-            x = u * F.gelu(v)
+            x = u * F.silu(v * math.sqrt(v.shape[-1]))  # Scaling factor on v
             x = self.c_proj(x)
         return x
 
 class Block(nn.Module):
     """Transformer block with PoM attention and MLP."""
     
-    def __init__(self, mixing_layer, n_embd, n_layer, use_nGPT, use_attn_alpha, use_attn_mlp, use_suv):
+    def __init__(self, mixing_layer, n_embd, n_layer, use_nGPT, use_attn_alpha, use_attn_mlp, use_suv, use_scaling):
         super().__init__()
         self.attn = mixing_layer #CausalSelfPoM(n_embd, degree, expand, n_head)
         self.attn = deepcopy(mixing_layer) #CausalSelfPoM(n_embd, degree, expand, n_head)
@@ -178,6 +178,7 @@ class Block(nn.Module):
         self.use_attn_alpha = use_attn_alpha
         self.use_attn_mlp = use_attn_mlp
         self.use_suv = use_suv
+        self.use_scaling = use_scaling
         self.mlp = MLP(n_embd, use_nGPT, use_suv)
 
         if self.use_nGPT == 1:
@@ -204,6 +205,7 @@ class Block(nn.Module):
         if self.use_nGPT == 0:
             x = x + self.attn_scale * self.attn(rmsnorm(x))
             x = x + self.mlp(rmsnorm(x))
+            return x
 
         if self.use_nGPT == 1:
             x_norm = justnorm(x)
@@ -236,7 +238,7 @@ class Block(nn.Module):
 class GPT(nn.Module):
     """GPT model with Polynomial Mixer attention."""
     
-    def __init__(self, mixing_layer, vocab_size: int = 50257, n_layer: int = 12, n_head: int = 12, n_embd: int = 768, use_nGPT: int = 0, use_attn_alpha: int = 0, use_attn_mlp: int = 0, use_suv: int = 0, log_stats: int = 0):
+    def __init__(self, mixing_layer, vocab_size: int = 50257, n_layer: int = 12, n_head: int = 12, n_embd: int = 768, use_nGPT: int = 0, use_attn_alpha: int = 0, use_attn_mlp: int = 0, use_suv: int = 0, log_stats: int = 0, use_scaling: int = 0):
         super().__init__()
         self.vocab_size = vocab_size
         self.n_layer = n_layer
@@ -248,10 +250,11 @@ class GPT(nn.Module):
         self.use_attn_mlp = use_attn_mlp
         self.use_suv = use_suv
         self.log_stats = log_stats
+        self.use_scaling = use_scaling
 
         self.transformer = nn.ModuleDict(dict(
             wte=nn.Embedding(self.vocab_size, self.n_embd),
-            h=nn.ModuleList([Block(mixing_layer, self.n_embd, self.n_layer, self.use_nGPT, self.use_attn_alpha, self.use_attn_mlp, self.use_suv) for _ in range(self.n_layer)]),
+            h=nn.ModuleList([Block(mixing_layer, self.n_embd, self.n_layer, self.use_nGPT, self.use_attn_alpha, self.use_attn_mlp, self.use_suv, self.use_scaling) for _ in range(self.n_layer)]),
         ))
         self.lm_head = nn.Linear(self.n_embd, self.vocab_size, bias=False)
         self.transformer.wte.weight = self.lm_head.weight  # weight tying
