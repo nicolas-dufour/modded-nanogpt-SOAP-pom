@@ -195,6 +195,7 @@ class Block(nn.Module):
                 self.mlp_alpha = nn.Parameter(self.mlp_alpha_init_scaling * torch.ones(n_embd, dtype=torch.float32))
 
             # For mlp intermediate layers
+            self.suv = None
             if self.use_suv == 1:
                 self.suv = {"init_value": 1.0,
                             "init_scaling": 1.0}
