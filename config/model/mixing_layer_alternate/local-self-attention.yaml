@@ -1,0 +1,6 @@
+_target_: models.alternate_gpt.CausalLocalSelfAttention
+n_embd: ${model.n_embd}
+degree: ${model.degree}
+expand: ${model.expand}
+n_head: ${model.n_head}
+attention_chunk_size: 128
