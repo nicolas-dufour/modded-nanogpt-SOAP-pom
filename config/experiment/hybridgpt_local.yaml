@@ -1,0 +1,11 @@
+# @package _global_
+
+defaults:
+  - override /model: hybridgpt
+  - override /model/mixing_layer_alternate: local-self-attention
+
+training:
+  batch_size: 48
+  accumulation: 8
+
+experiment_name: baseline_hybrid_${model.pom_to_sa_ratio}_${model.n_layer}_${hydra:runtime.choices.model/mixing_layer_alternate}_chunk_${model.mixing_layer_alternate.attention_chunk_size}_seq_${training.sequence_length}

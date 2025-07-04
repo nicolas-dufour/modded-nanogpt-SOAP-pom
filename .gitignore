@@ -5,3 +5,5 @@ logs/
 outputs/
 wandb/
 checkpoints/
+multirun/
+launch.json

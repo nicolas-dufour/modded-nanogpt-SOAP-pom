@@ -197,12 +197,6 @@ def generate_samples(model, val_loader, device='cuda', num_unconditional=3, num_
     val_loader.reset()
     val_x, _ = val_loader.next_batch()
     
-    # Ensure all distributed processes use the same validation batch for consistent prompts
-    # Note: This is only needed if sampling happens on multiple processes, but doesn't hurt
-    if dist.is_initialized():
-        # Broadcast the validation batch from rank 0 to all processes
-        dist.broadcast(val_x, src=0)
-    
     # Debug: Print first few tokens of first sample to verify consistency
     if debug and len(val_x) > 0:
         first_tokens = val_x[0, :min(8, val_x.shape[1])].cpu().tolist()
@@ -336,6 +330,10 @@ def main(cfg: DictConfig):
         log_dir.mkdir(parents=True, exist_ok=True)
         logfile = log_dir / "log.txt"
         logfile.touch()  # create empty log file
+        
+        # Set up checkpoint directory
+        checkpoint_dir = Path("checkpoints") / cfg.experiment_name
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
     
     # Set up rich progress bar (only for master process)
     console = Console()
@@ -465,7 +463,7 @@ def main(cfg: DictConfig):
                 'model': raw_model.state_dict(),
                 'optimizer': optimizer.state_dict()
             }
-            torch.save(checkpoint, log_dir / f'state_step{step:06d}.pt')
+            torch.save(checkpoint, checkpoint_dir / "last.ckpt")
         
         if last_step:
             break

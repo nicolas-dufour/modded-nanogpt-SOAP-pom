@@ -1,0 +1,10 @@
+# @package _global_
+
+defaults:
+  - override /model: hybridgpt
+
+training:
+  batch_size: 48
+  accumulation: 8
+
+experiment_name: baseline_hybrid_${model.pom_to_sa_ratio}_${model.n_layer}

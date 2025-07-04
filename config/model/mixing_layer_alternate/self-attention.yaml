@@ -1,0 +1,5 @@
+_target_: models.gpt.CausalSelfAttention
+n_embd: ${model.n_embd}
+degree: ${model.degree}
+expand: ${model.expand}
+n_head: ${model.n_head}
