@@ -119,7 +119,7 @@ def get_checkpoint_info(checkpoint_path):
     try:
         # Load only the metadata
         device = 'cpu'  # Load on CPU for inspection
-        checkpoint = torch.load(checkpoint_path, map_location=device)
+        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
         
         info = {
             'step': checkpoint.get('step', 'Unknown'),
@@ -150,16 +150,24 @@ def load_model(checkpoint_path):
     try:
         # Load checkpoint
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        checkpoint = torch.load(checkpoint_path, map_location=device)
+        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
         
         # Get config
         cfg = checkpoint['config']
-        
+        # Remove '_orig_mod.' prefix from checkpoint keys if present
+        state_dict = checkpoint['model']
+        new_state_dict = {}
+        for k, v in state_dict.items():
+            if k.startswith('_orig_mod.'):
+                new_key = k[len('_orig_mod.'):]
+            else:
+                new_key = k
+            new_state_dict[new_key] = v
         # Initialize model using Hydra instantiate
         model = instantiate(cfg.model.gpt)
         
         # Load model state
-        model.load_state_dict(checkpoint['model'])
+        model.load_state_dict(new_state_dict)
         model = model.to(device)
         model.eval()
         
