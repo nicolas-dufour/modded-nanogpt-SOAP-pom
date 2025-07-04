@@ -4,5 +4,6 @@ __pycache__/
 logs/
 outputs/
 wandb/
+checkpoints/
 multirun/
 launch.json
